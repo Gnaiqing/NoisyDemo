@@ -126,11 +126,12 @@ def optimize_model(policy_net, target_net, optimizer, memory):
     n_dim = len(batch.state[0])
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state
-                                       if s is not None]).reshape(-1, n_dim)
+    # non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+    #                                         batch.next_state)), device=device, dtype=torch.bool)
+    # non_final_next_states = torch.cat([s for s in batch.next_state
+    #                                    if s is not None]).reshape(-1, n_dim)
     state_batch = torch.cat(batch.state).reshape(-1, n_dim)
+    next_state_batch = torch.cat(batch.next_state).reshape(-1, n_dim)
     action_batch = torch.cat(batch.action).reshape(-1,1)
     reward_batch = torch.cat(batch.reward)
     done_batch = torch.cat(batch.done)
@@ -145,8 +146,7 @@ def optimize_model(policy_net, target_net, optimizer, memory):
     # on the "older" target_net; selecting their best reward with max(1)[0].
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_states).max(dim=1)[0].detach()
+    next_state_values = target_net(next_state_batch).max(dim=1)[0] * (1-done_batch).detach()
     # Compute the expected Q values
     expected_state_action_values = ((next_state_values * GAMMA) + reward_batch).unsqueeze(1)
     # Compute Huber loss
