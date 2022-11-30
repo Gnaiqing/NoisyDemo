@@ -14,11 +14,14 @@ def normalize_box_state(obs, low, high):
     """
     obs = np.array(obs)
     x = (obs - low) / (high - low)
-    if len(x.shape) == 2:
-        x = np.mean(x, axis=1)
-    else:
-        x = np.mean(x)
     return x
+
+
+def calc_distance(x1, x2, metric="l2"):
+    if metric == "l2":
+        return np.sum((x2-x1)**2, axis=1)
+    else:
+        raise NotImplementedError("Distance metric not implemented.")
 
 
 def load_demonstrations(dataset_dir, model, env, n_expert):
@@ -36,7 +39,7 @@ def load_demonstrations(dataset_dir, model, env, n_expert):
         infile = open(filepath)
         demo = json.load(infile)
         demos.append(demo)
-    return demos
+    return convert_demos_to_dict(demos)
 
 
 def convert_demos_to_dict(demos):
@@ -75,7 +78,7 @@ def calc_potential(obs, action, low, high, demo_dict, sigma=0.5):
     demo_states = demo_dict[action]
     norm_demo_states = normalize_box_state(demo_states, low, high)
     norm_obs_states = normalize_box_state(obs, low, high)
-    g = np.exp(- (norm_demo_states - norm_obs_states)**2 / sigma)
+    g = np.exp(- calc_distance(norm_obs_states, norm_demo_states) / sigma)
     phi = np.max(g)
     return phi
 
