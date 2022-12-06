@@ -13,8 +13,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from dqn import DQN, ReplayMemory, select_action, plot_durations, plot_loss
-from potential_function import load_demonstrations, calc_potential
+from dqn import DQN, ReplayMemory, select_action, plot_durations, plot_loss, plot_scores
+from potential_function import load_demonstrations, calc_potential, calc_potential_scored
+from tqdm import tqdm
 
 BATCH_SIZE = 32
 POLICY_UPDATE = 4
@@ -29,7 +30,7 @@ Transition = namedtuple('Transition',
 episode_durations = []
 
 
-def optimize_rlfd_model(policy_net, target_net, optimizer, memory, demo_dict, low, high, sigma=0.5):
+def optimize_rlfd_model(ind, policy_net, target_net, optimizer, memory, demos_states, demos_actions, demo_dict, last_scores, n_iter, low, high, sigma=0.5):
     """
     Optimize the model using demonstration and reward
     :param policy_net:
@@ -58,6 +59,20 @@ def optimize_rlfd_model(policy_net, target_net, optimizer, memory, demo_dict, lo
     # for each batch state according to policy_net
     state_action_values = policy_net(state_batch).gather(1, action_batch)
 
+    n_demos = len(demo_dict)
+    scores = []
+    for i in range(n_demos):
+        # print(demos_states[i].device)
+        # print(demos_states[i].shape, demos_actions[i].shape, policy_net(demos_states[i]).shape)
+        score = (policy_net(demos_states[i]).gather(1, demos_actions[i].reshape(-1, 1)) - target_net(demos_states[i])).mean().detach().cpu().item()
+        scores.append(score)
+    # print(scores)
+    scores = np.exp(100 * np.array(scores))
+    scores = scores / np.sum(scores)
+    scores = last_scores * n_iter + scores
+    scores /= scores.sum()
+    # print(scores)
+
     # Compute V(s_{t+1}) for all next states.
     # Expected values of actions for non_final_next_states are computed based
     # on the "older" target_net; selecting their best reward with max(1)[0].
@@ -66,12 +81,20 @@ def optimize_rlfd_model(policy_net, target_net, optimizer, memory, demo_dict, lo
     next_action_batch = policy_net(next_state_batch).max(dim=1)[1]
     batch_f = []
     for i in range(len(batch.state)):
-        s = state_batch[i].detach().numpy()
-        a = action_batch[i].detach().numpy().item()
-        next_s = next_state_batch[i].detach().numpy()
-        next_a = next_action_batch[i].detach().numpy().item()
-        f = GAMMA * calc_potential(next_s,next_a,low, high, demo_dict, sigma=sigma) - \
-            calc_potential(s,a,low, high, demo_dict, sigma=sigma)
+        # s = state_batch[i].detach().cpu().numpy()
+        # a = action_batch[i].detach().cpu().numpy().item()
+        # next_s = next_state_batch[i].detach().cpu().numpy()
+        # next_a = next_action_batch[i].detach().cpu().numpy().item()
+        s = state_batch[i].detach()
+        a = action_batch[i].detach()
+        next_s = next_state_batch[i].detach()
+        next_a = next_action_batch[i].detach()
+        if ind:
+            f = GAMMA * calc_potential_scored(next_s,next_a.detach().cpu().item(),low, high, demo_dict, scores, sigma=sigma) - \
+                calc_potential_scored(s,a.detach().cpu().item(),low, high, demo_dict, scores, sigma=sigma)
+        else:
+            f = GAMMA * calc_potential(next_s,next_a.detach().cpu().item(),low, high, demo_dict, sigma=sigma) - \
+                calc_potential(s,a.detach().cpu().item(),low, high, demo_dict, sigma=sigma)
         batch_f.append(f)
 
     batch_f = torch.tensor(batch_f).to(device)
@@ -89,12 +112,24 @@ def optimize_rlfd_model(policy_net, target_net, optimizer, memory, demo_dict, lo
     # for param in policy_net.parameters():
     #     param.grad.data.clamp_(-1, 1)
     optimizer.step()
-    return loss_value.item()
+    return loss_value.item(), scores
 
 
-def train_rlfd(env, demo_dict, num_episodes):
+def train_rlfd(ind, env, demos_states, demos_actions, demo_dict, num_episodes):
+    # pbar = InitBar()
+
     n_actions = env.action_space.n
     n_dim = flatdim(env.observation_space)
+
+    n_demos = len(demo_dict)
+    for i in range(n_demos):
+        demos_states[i] = torch.tensor(demos_states[i], dtype=torch.float).to(device)
+        demos_actions[i] = torch.tensor(demos_actions[i], dtype=torch.int64).to(device)
+        for action in demo_dict[i].keys():
+            demo_dict[i][action] = torch.tensor(demo_dict[i][action], dtype=torch.float).to(device)
+
+    ob_low = torch.tensor(env.observation_space.low, dtype=torch.float).to(device)
+    ob_high = torch.tensor(env.observation_space.high, dtype=torch.float).to(device)
 
     policy_net = DQN(n_dim, n_actions).to(device)
     target_net = DQN(n_dim, n_actions).to(device)
@@ -126,7 +161,9 @@ def train_rlfd(env, demo_dict, num_episodes):
                 break
 
     epsilon = EPS_START
-    for i_episode in range(num_episodes):
+    last_scores = np.zeros(n_demos)
+    scores = []
+    for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and state
         state = env.reset()
         state = torch.tensor(state, device=device)
@@ -149,8 +186,9 @@ def train_rlfd(env, demo_dict, num_episodes):
             steps_to_update_model += 1
             # Perform one step of the optimization (on the policy network)
             if steps_to_update_model % POLICY_UPDATE == 0:
-                loss = optimize_rlfd_model(policy_net, target_net, optimizer, memory, demo_dict,
-                                           env.observation_space.low, env.observation_space.high)
+                loss, last_scores = optimize_rlfd_model(ind, policy_net, target_net, optimizer, memory, demos_states, demos_actions, demo_dict, last_scores, i_episode,
+                                           ob_low, ob_high)
+                scores.append(last_scores)
                 losses.append(loss)
 
             # Update the target network, copying all weights and biases in DQN
@@ -162,8 +200,10 @@ def train_rlfd(env, demo_dict, num_episodes):
                 episode_durations.append(t + 1)
                 break
 
+        # pbar((i_episode + 1) / num_episodes * 100)
+
     print('Complete')
-    return policy_net, episode_durations, losses
+    return policy_net, episode_durations, losses, scores
 
 
 if __name__ == "__main__":
@@ -173,13 +213,16 @@ if __name__ == "__main__":
     parser.add_argument("--expert_model", type=str, default="A2C")
     parser.add_argument("--n_experts", type=int, default=10)
     parser.add_argument("--n_episodes", type=int, default=1000)
+    parser.add_argument("--individual", action="store_true")
     parser.add_argument("--figpath", type=str, default="../fig")
     args = parser.parse_args()
     env = gym.make(args.env)
-    demo_dict = load_demonstrations(args.dataset_dir, args.expert_model, args.env, args.n_experts)
-    policy_net, episode_durations, losses = train_rlfd(env, demo_dict, args.n_episodes)
+    demos_states, demos_actions, demo_dict = load_demonstrations(args.dataset_dir, args.expert_model, args.env, args.n_experts)
+    policy_net, episode_durations, losses, scores = train_rlfd(args.individual, env, demos_states, demos_actions, demo_dict, args.n_episodes)
     env.close()
-    figpath = Path(args.figpath) / f"{args.env}_rlfd_duration.jpg"
+    figpath = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_duration.jpg"
     plot_durations(episode_durations, figpath)
-    figpath_2 = Path(args.figpath) / f"{args.env}_rlfd_loss.jpg"
+    figpath_2 = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_loss.jpg"
     plot_loss(losses, figpath_2)
+    figpath_3 = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_scores.jpg"
+    plot_scores(scores, figpath_3)

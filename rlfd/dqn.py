@@ -117,6 +117,17 @@ def plot_loss(losses, figpath):
     plt.savefig(figpath)
 
 
+def plot_scores(scores, figpath):
+    plt.figure()
+    scores = np.stack(scores, 0)
+    n_demos = scores.shape[1]
+    for i in range(n_demos):
+        plt.plot(scores[:, i], 'b' if i < n_demos // 2 else 'g', label=f"demo-{i}")
+    plt.xlabel("Iteration")
+    plt.ylabel("Score")
+    plt.savefig(figpath)
+
+
 def optimize_model(policy_net, target_net, optimizer, memory):
     transitions = memory.sample(BATCH_SIZE)
     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for

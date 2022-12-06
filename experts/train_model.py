@@ -35,7 +35,7 @@ if __name__ == "__main__":
     for i in range(1000):
         action, _states = model.predict(obs, deterministic=True)
         obs, rewards, done, info = env.step(action)
-        env.render()
+        # env.render()
         if done:
             obs = env.reset()
 

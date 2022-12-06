@@ -80,7 +80,12 @@ if __name__ == "__main__":
 
     np.random.seed(0)
     for i in range(args.n_experts):
-        noise = args.min_noise + np.random.rand() * (args.max_noise - args.min_noise)
+        # noise = args.min_noise + np.random.rand() * (args.max_noise - args.min_noise)
+        # noise = args.min_noise + i * (args.max_noise - args.min_noise) / (args.n_experts - 1)
+        if i < args.n_experts // 2:
+            noise = 0
+        else:
+            noise = 1
         trajectory = collect_trajectory(model, env, noise)
         trajectory_path = Path(args.dataset_path) / f"{args.model}_{args.env}_{i}.json"
         with open(trajectory_path, 'w', encoding='utf-8') as f:
