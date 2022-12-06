@@ -118,12 +118,12 @@ def plot_loss(losses, figpath):
     plt.savefig(figpath)
 
 
-def plot_scores(scores, figpath):
+def plot_scores(scores, figpath, num_noisy):
     plt.figure()
     scores = np.stack(scores, 0)
     n_demos = scores.shape[1]
     for i in range(n_demos):
-        plt.plot(scores[:, i], 'b' if i < n_demos // 2 else 'g', label=f"demo-{i}")
+        plt.plot(scores[:, i], 'b' if i < num_noisy else 'g', label=f"demo-{i}")
     plt.xlabel("Iteration")
     plt.ylabel("Score")
     plt.savefig(figpath)

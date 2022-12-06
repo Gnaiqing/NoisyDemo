@@ -216,6 +216,7 @@ if __name__ == "__main__":
     parser.add_argument("--eps_decay", type=float, default=0.95)
     parser.add_argument("--toggle_new_method", type=int, default=1)
     parser.add_argument("--figpath", type=str, default="../fig")
+    parser.add_argument("--num_noisy", type=int, default=5)
     args = parser.parse_args()
     print(args.toggle_new_method)
     env = gym.make(args.env)
@@ -227,4 +228,4 @@ if __name__ == "__main__":
     figpath_2 = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_loss.jpg"
     plot_loss(losses, figpath_2)
     figpath_3 = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_scores.jpg"
-    plot_scores(scores, figpath_3)
+    plot_scores(scores, figpath_3, args.num_noisy)

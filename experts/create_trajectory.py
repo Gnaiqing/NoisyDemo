@@ -63,6 +63,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_experts", type=int, default=10)
     parser.add_argument("--min_noise", type=float, default=0.0)
     parser.add_argument("--max_noise", type=float, default=0.3)
+    parser.add_argument("--num_noisy", type=int, default=5)
     args = parser.parse_args()
     tag = f"{args.model}_{args.env}"
     env = gym.make(args.env)
@@ -78,11 +79,13 @@ if __name__ == "__main__":
     else:
         model = train_model(args.env, args.model)
 
+    num_noisy = 9
+
     np.random.seed(0)
     for i in range(args.n_experts):
         # noise = args.min_noise + np.random.rand() * (args.max_noise - args.min_noise)
         # noise = args.min_noise + i * (args.max_noise - args.min_noise) / (args.n_experts - 1)
-        if i < args.n_experts // 2:
+        if i < num_noisy:
             noise = 0
         else:
             noise = 1
