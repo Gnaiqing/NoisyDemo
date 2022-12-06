@@ -212,18 +212,18 @@ if __name__ == "__main__":
     parser.add_argument("--env", type=str, default="CartPole-v1")
     parser.add_argument("--expert_model", type=str, default="A2C")
     parser.add_argument("--n_experts", type=int, default=10)
-    parser.add_argument("--n_episodes", type=int, default=1000)
+    parser.add_argument("--n_episodes", type=int, default=10)
     parser.add_argument("--eps_decay", type=float, default=0.95)
-    parser.add_argument("--individual", action="store_false")
+    parser.add_argument("--toggle_new_method", type=bool, default=True)
     parser.add_argument("--figpath", type=str, default="../fig")
     args = parser.parse_args()
     env = gym.make(args.env)
     demos_states, demos_actions, demo_dict = load_demonstrations(args.dataset_dir, args.expert_model, args.env, args.n_experts)
-    policy_net, episode_durations, losses, scores = train_rlfd(args.individual, env, demos_states, demos_actions, demo_dict, args.n_episodes, args.eps_decay)
+    policy_net, episode_durations, losses, scores = train_rlfd(args.toggle_new_method, env, demos_states, demos_actions, demo_dict, args.n_episodes, args.eps_decay)
     env.close()
-    figpath = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_duration.jpg"
+    figpath = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_duration.jpg"
     plot_durations(episode_durations, figpath)
-    figpath_2 = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_loss.jpg"
+    figpath_2 = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_loss.jpg"
     plot_loss(losses, figpath_2)
-    figpath_3 = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_scores.jpg"
+    figpath_3 = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_scores.jpg"
     plot_scores(scores, figpath_3)
