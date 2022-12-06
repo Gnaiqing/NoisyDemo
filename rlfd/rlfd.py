@@ -115,7 +115,7 @@ def optimize_rlfd_model(ind, policy_net, target_net, optimizer, memory, demos_st
     return loss_value.item(), scores
 
 
-def train_rlfd(ind, env, demos_states, demos_actions, demo_dict, num_episodes):
+def train_rlfd(ind, env, demos_states, demos_actions, demo_dict, num_episodes, eps_decay):
     # pbar = InitBar()
 
     n_actions = env.action_space.n
@@ -170,7 +170,7 @@ def train_rlfd(ind, env, demos_states, demos_actions, demo_dict, num_episodes):
         for t in count():
             # Select and perform an action
             action = select_action(policy_net, state, n_actions, epsilon)
-            epsilon = max(epsilon * 0.999, EPS_END)
+            epsilon = max(epsilon * eps_decay, EPS_END)
             next_state, reward, done, _ = env.step(action.item())
             action = torch.tensor([action], device=device)
             reward = torch.tensor([reward], device=device)
@@ -213,12 +213,13 @@ if __name__ == "__main__":
     parser.add_argument("--expert_model", type=str, default="A2C")
     parser.add_argument("--n_experts", type=int, default=10)
     parser.add_argument("--n_episodes", type=int, default=1000)
+    parser.add_argument("--eps_decay", type=float, default=0.95)
     parser.add_argument("--individual", action="store_true")
     parser.add_argument("--figpath", type=str, default="../fig")
     args = parser.parse_args()
     env = gym.make(args.env)
     demos_states, demos_actions, demo_dict = load_demonstrations(args.dataset_dir, args.expert_model, args.env, args.n_experts)
-    policy_net, episode_durations, losses, scores = train_rlfd(args.individual, env, demos_states, demos_actions, demo_dict, args.n_episodes)
+    policy_net, episode_durations, losses, scores = train_rlfd(args.individual, env, demos_states, demos_actions, demo_dict, args.n_episodes, args.eps_decay)
     env.close()
     figpath = Path(args.figpath) / f"{args.env}_rlfd{'_ind' if args.individual else ''}_duration.jpg"
     plot_durations(episode_durations, figpath)

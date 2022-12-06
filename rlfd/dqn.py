@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from tqdm import tqdm
 
 BATCH_SIZE = 32
 POLICY_UPDATE = 4
@@ -78,7 +79,7 @@ class DQN(nn.Module):
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
-        y = self.net(x)
+        y = self.net(x.float())
         return y
 
 
@@ -174,7 +175,7 @@ def optimize_model(policy_net, target_net, optimizer, memory):
     return loss_value.item()
 
 
-def train_dqn(env, num_episodes):
+def train_dqn(env, num_episodes, eps_decay):
     n_actions = env.action_space.n
     n_dim = flatdim(env.observation_space)
     policy_net = DQN(n_dim, n_actions).to(device)
@@ -207,14 +208,14 @@ def train_dqn(env, num_episodes):
                 break
 
     epsilon = EPS_START
-    for i_episode in range(num_episodes):
+    for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and state
         state = env.reset()
         state = torch.tensor(state, device=device)
         for t in count():
             # Select and perform an action
             action = select_action(policy_net, state, n_actions, epsilon)
-            epsilon = max(epsilon * 0.999, EPS_END)
+            epsilon = max(epsilon * eps_decay, EPS_END)
             next_state, reward, done, _ = env.step(action.item())
             action = torch.tensor([action], device=device)
             reward = torch.tensor([reward], device=device)
@@ -232,7 +233,6 @@ def train_dqn(env, num_episodes):
             if steps_to_update_model % POLICY_UPDATE == 0:
                 loss = optimize_model(policy_net, target_net, optimizer, memory)
                 losses.append(loss)
-
             # Update the target network, copying all weights and biases in DQN
             if steps_to_update_model >= TARGET_UPDATE:
                 target_net.load_state_dict(policy_net.state_dict())
@@ -250,10 +250,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="CartPole-v1")
     parser.add_argument("--n_episodes", type=int, default=1000)
+    parser.add_argument("--eps_decay", type=float, default=0.95)
     parser.add_argument("--figpath", type=str, default="../fig")
     args = parser.parse_args()
     env = gym.make(args.env)
-    policy_net, episode_durations, losses = train_dqn(env, args.n_episodes)
+    policy_net, episode_durations, losses = train_dqn(env, args.n_episodes, args.eps_decay)
     env.close()
     figpath = Path(args.figpath) / f"{args.env}_dqn_duration.jpg"
     plot_durations(episode_durations, figpath)
