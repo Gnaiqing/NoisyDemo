@@ -214,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_experts", type=int, default=10)
     parser.add_argument("--n_episodes", type=int, default=1000)
     parser.add_argument("--eps_decay", type=float, default=0.95)
-    parser.add_argument("--individual", type=bool, action="store_false")
+    parser.add_argument("--individual", action="store_false")
     parser.add_argument("--figpath", type=str, default="../fig")
     args = parser.parse_args()
     env = gym.make(args.env)
