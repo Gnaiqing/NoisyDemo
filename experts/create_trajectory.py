@@ -86,9 +86,9 @@ if __name__ == "__main__":
         # noise = args.min_noise + np.random.rand() * (args.max_noise - args.min_noise)
         # noise = args.min_noise + i * (args.max_noise - args.min_noise) / (args.n_experts - 1)
         if i < num_noisy:
-            noise = 0
-        else:
             noise = 1
+        else:
+            noise = 0
         trajectory = collect_trajectory(model, env, noise)
         trajectory_path = Path(args.dataset_path) / f"{args.model}_{args.env}_{i}.json"
         with open(trajectory_path, 'w', encoding='utf-8') as f:
