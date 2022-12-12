@@ -110,6 +110,15 @@ def plot_durations(episode_durations, figpath):
     plt.savefig(figpath)
 
 
+def plot_rewards(episode_rewards, figpath):
+    plt.figure()
+    plt.plot(episode_rewards)
+    plt.title('Episode Rewards')
+    plt.xlabel('Episode')
+    plt.ylabel('Cumulative Rewards')
+    plt.savefig(figpath)
+
+
 def plot_loss(losses, figpath):
     plt.figure()
     plt.plot(losses)

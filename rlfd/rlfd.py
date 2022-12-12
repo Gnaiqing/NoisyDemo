@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from dqn import DQN, ReplayMemory, select_action, plot_durations, plot_loss, plot_scores
+from dqn import DQN, ReplayMemory, select_action, plot_durations, plot_loss, plot_scores, plot_rewards
 from potential_function import load_demonstrations, calc_potential, calc_potential_scored
 from tqdm import tqdm
 
@@ -27,10 +27,11 @@ TARGET_UPDATE = 100
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
-episode_durations = []
 
 
-def optimize_rlfd_model(ind, policy_net, target_net, optimizer, memory, demos_states, demos_actions, demo_dict, last_scores, n_iter, low, high, sigma=0.5):
+
+def optimize_rlfd_model(ind, policy_net, target_net, optimizer, memory, demos_states, demos_actions, demo_dict,
+                        last_scores, n_iter, low, high, sigma=0.5):
     """
     Optimize the model using demonstration and reward
     :param policy_net:
@@ -163,15 +164,19 @@ def train_rlfd(ind, env, demos_states, demos_actions, demo_dict, num_episodes, e
     epsilon = EPS_START
     last_scores = np.zeros(n_demos)
     scores = []
+    episode_durations = []
+    episode_rewards = []
     for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and state
         state = env.reset()
         state = torch.tensor(state, device=device)
+        sum_reward = 0
         for t in count():
             # Select and perform an action
             action = select_action(policy_net, state, n_actions, epsilon)
             epsilon = max(epsilon * eps_decay, EPS_END)
             next_state, reward, done, _ = env.step(action.item())
+            sum_reward += reward
             action = torch.tensor([action], device=device)
             reward = torch.tensor([reward], device=device)
             dones = torch.tensor([int(done)], device=device)
@@ -198,13 +203,45 @@ def train_rlfd(ind, env, demos_states, demos_actions, demo_dict, num_episodes, e
 
             if done:
                 episode_durations.append(t + 1)
+                episode_rewards.append(sum_reward)
                 break
 
         # pbar((i_episode + 1) / num_episodes * 100)
 
     print('Complete')
-    return policy_net, episode_durations, losses, scores
+    return policy_net, episode_durations, episode_rewards, losses, scores
 
+
+def evaluate_rlfd(policy_net, env, criterion="reward", repeats=100):
+    """
+    Evaluate the performance of trained policy
+    :param policy_net: trained network
+    :param env: environment
+    :param criterion: "episode" or "reward"
+    :return:
+    """
+    rewards_list = []
+    durations_list = []
+    for i in range(repeats):
+        state = env.reset()
+        state = torch.tensor(state, device=device)
+        done = False
+        sum_reward = 0
+        duration = 0
+        while not done:
+            action = policy_net(state).argmax().detach().numpy().item()
+            next_state, reward, done, _ = env.step(action)
+            state = torch.tensor(state, device=device)
+            duration += 1
+            sum_reward += reward
+
+        durations_list.append(duration)
+        rewards_list.append(sum_reward)
+
+    if criterion == "reward":
+        return np.array(rewards_list).mean()
+    else:
+        return np.array(durations_list).mean()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -221,7 +258,7 @@ if __name__ == "__main__":
     print(args.toggle_new_method)
     env = gym.make(args.env)
     demos_states, demos_actions, demo_dict = load_demonstrations(args.dataset_dir, args.expert_model, args.env, args.n_experts)
-    policy_net, episode_durations, losses, scores = train_rlfd(args.toggle_new_method, env, demos_states, demos_actions, demo_dict, args.n_episodes, args.eps_decay)
+    policy_net, episode_durations, episode_rewards, losses, scores = train_rlfd(args.toggle_new_method, env, demos_states, demos_actions, demo_dict, args.n_episodes, args.eps_decay)
     env.close()
     figpath = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_duration.jpg"
     plot_durations(episode_durations, figpath)
@@ -229,3 +266,8 @@ if __name__ == "__main__":
     plot_loss(losses, figpath_2)
     figpath_3 = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_scores.jpg"
     plot_scores(scores, figpath_3, args.num_noisy)
+    figpath_4 = Path(args.figpath) / f"{args.env}_rlfd{'_new' if args.toggle_new_method else ''}_reward.jpg"
+    plot_rewards(episode_rewards, figpath_4)
+
+    test_reward = evaluate_rlfd(policy_net, env)
+    print("Test reward:", test_reward)

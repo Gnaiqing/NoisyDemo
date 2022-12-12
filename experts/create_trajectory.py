@@ -79,7 +79,7 @@ if __name__ == "__main__":
     else:
         model = train_model(args.env, args.model)
 
-    num_noisy = 9
+    num_noisy = args.num_noisy
 
     np.random.seed(0)
     for i in range(args.n_experts):
