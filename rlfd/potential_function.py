@@ -58,7 +58,7 @@ def convert_demos_to_dict(demos):
         for record in demos[i]:
             state = record["state"]
             action = record["action"]
-            if action in demo_dict:
+            if action in demo_dict[i]:
                 demo_dict[i][action].append(state)
             else:
                 demo_dict[i][action] = []
@@ -83,7 +83,12 @@ def calc_potential(obs, action, low, high, demo_dict, sigma=0.5):
     :param sigma: hyperparameter for covariance matrix
     :return: Phi_D(s,a)
     """
-    demo_states = torch.cat([dd[action] for dd in demo_dict], 0)
+    demo_states = []
+    for dd in demo_dict:
+        if action in dd:
+            demo_states.append(dd[action])
+    demo_states = torch.cat(demo_states, 0)
+    # demo_states = torch.cat([dd[action] for dd in demo_dict], 0)
     norm_demo_states = normalize_box_state(demo_states, low, high)
     norm_obs_states = normalize_box_state(obs, low, high)
     g = torch.exp(- calc_distance(norm_obs_states, norm_demo_states) / sigma)
@@ -103,10 +108,12 @@ def calc_potential_scored(obs, action, low, high, demo_dict, score, sigma=0.5):
     n_demos = len(demo_dict)
     phi = 0
     for i in range(n_demos):
-        demo_states = demo_dict[i][action]
-        norm_demo_states = normalize_box_state(demo_states, low, high)
-        norm_obs_states = normalize_box_state(obs, low, high)
-        g = torch.exp(- calc_distance(norm_obs_states, norm_demo_states) / sigma)
-        _phi = torch.max(g)
-        phi += _phi * score[i]
+        if action in demo_dict[i]:
+            demo_states = demo_dict[i][action]
+            norm_demo_states = normalize_box_state(demo_states, low, high)
+            norm_obs_states = normalize_box_state(obs, low, high)
+            g = torch.exp(- calc_distance(norm_obs_states, norm_demo_states) / sigma)
+            _phi = torch.max(g)
+            phi += _phi * score[i]
+
     return phi

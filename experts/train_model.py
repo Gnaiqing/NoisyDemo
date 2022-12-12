@@ -6,7 +6,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 
 def train_model(env, model_name):
     if model_name == "A2C":
-        model = A2C("MlpPolicy", env)
+        model = A2C("MlpPolicy", env, normalize_advantage=True)
     elif model_name == "DQN":
         model = DQN("MlpPolicy", env)
     elif model_name == "PPO":
@@ -14,7 +14,7 @@ def train_model(env, model_name):
     else:
         raise NotImplementedError
 
-    model.learn(total_timesteps=int(1e5), progress_bar=True)
+    model.learn(total_timesteps=int(1e6), progress_bar=True)
     return model
 
 

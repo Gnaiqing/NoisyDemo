@@ -36,6 +36,7 @@ def to_point(x):
 
 def collect_trajectory(model, env, noise=0.0, timesteps=1000):
     obs = env.reset()
+    env.action_space.np_random.seed(123)
     trajectory = []
     for i in range(timesteps):
         last_obs = obs
@@ -61,9 +62,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="A2C")
     parser.add_argument("--dataset_path", type=str, default="../datasets")
     parser.add_argument("--n_experts", type=int, default=10)
-    parser.add_argument("--min_noise", type=float, default=0.0)
-    parser.add_argument("--max_noise", type=float, default=0.3)
     parser.add_argument("--num_noisy", type=int, default=5)
+    parser.add_argument("--noise_level", type=float, default=1.0)
     args = parser.parse_args()
     tag = f"{args.model}_{args.env}"
     env = gym.make(args.env)
@@ -77,16 +77,14 @@ if __name__ == "__main__":
         else:
             raise NotImplementedError
     else:
-        model = train_model(args.env, args.model)
+        raise ValueError("Model does not exist.")
 
     num_noisy = args.num_noisy
 
     np.random.seed(0)
     for i in range(args.n_experts):
-        # noise = args.min_noise + np.random.rand() * (args.max_noise - args.min_noise)
-        # noise = args.min_noise + i * (args.max_noise - args.min_noise) / (args.n_experts - 1)
         if i < num_noisy:
-            noise = 1
+            noise = args.noise_level
         else:
             noise = 0
         trajectory = collect_trajectory(model, env, noise)
